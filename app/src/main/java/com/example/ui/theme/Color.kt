@@ -1,0 +1,35 @@
+package com.example.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+val NeuralCyan = Color(0xFF00E5FF)
+val NeuralTeal = Color(0xFF00BFA5)
+val NeuralIndigo = Color(0xFF536DFE)
+val NeuralAmber = Color(0xFFFFAB00)
+val NeuralCoral = Color(0xFFFF5252)
+
+// Dark Palette (Obsidian Technical Studio)
+val DarkBackground = Color(0xFF090D16)
+val DarkSurface = Color(0xFF111827)
+val DarkSurfaceVariant = Color(0xFF1E293B)
+val DarkPrimary = Color(0xFF00E5FF)
+val DarkOnPrimary = Color(0xFF00262C)
+val DarkPrimaryContainer = Color(0xFF0F2942)
+val DarkOnPrimaryContainer = Color(0xFFB8F4FF)
+val DarkSecondary = Color(0xFF10B981)
+val DarkOnSecondary = Color(0xFF002114)
+val DarkSecondaryContainer = Color(0xFF16253B)
+val DarkOnSecondaryContainer = Color(0xFFE2E8F0)
+
+// Light Palette (Crisp Technical Slate)
+val LightBackground = Color(0xFFF8FAFC)
+val LightSurface = Color(0xFFFFFFFF)
+val LightSurfaceVariant = Color(0xFFE2E8F0)
+val LightPrimary = Color(0xFF0284C7)
+val LightOnPrimary = Color(0xFFFFFFFF)
+val LightPrimaryContainer = Color(0xFFE0F2FE)
+val LightOnPrimaryContainer = Color(0xFF0C4A6E)
+val LightSecondary = Color(0xFF059669)
+val LightOnSecondary = Color(0xFFFFFFFF)
+val LightSecondaryContainer = Color(0xFFF1F5F9)
+val LightOnSecondaryContainer = Color(0xFF0F172A)

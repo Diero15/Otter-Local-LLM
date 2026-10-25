@@ -1,0 +1,6 @@
+{
+  "name": "Otter Local LLM",
+  "description": "Aplicación Android para inferencia local de modelos GGUF y MediaPipe en el dispositivo con Jetpack Compose.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

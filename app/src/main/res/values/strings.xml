@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">Otter Local LLM</string>
+    <string name="nav_chat">Chat IA</string>
+    <string name="nav_models">Model Store</string>
+    <string name="nav_persona">System Prompt</string>
+    <string name="nav_memory">RAM &amp; Motor</string>
+    <string name="new_chat">Nueva sesión</string>
+    <string name="clear_chat">Limpiar chat</string>
+    <string name="send_message">Enviar mensaje</string>
+    <string name="prompt_placeholder">Escribe un mensaje para tu IA local...</string>
+    <string name="unload_ram">Liberar RAM</string>
+    <string name="load_model">Cargar en RAM</string>
+    <string name="download_model">Descargar Modelo</string>
+    <string name="delete_model">Eliminar archivo</string>
+</resources>
