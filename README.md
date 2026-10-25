@@ -115,32 +115,6 @@ Debido a que los modelos de inteligencia artificial se cargan directamente en la
 
 ---
 
-## 🚀 Publicación y Compilación en Modo `Release` (No Debug)
-
-Para garantizar el máximo rendimiento del motor de inferencia y de Jetpack Compose (sin la sobrecarga de inspección de una compilación `debug`), **Otter Local LLM debe distribuirse y probarse en modo `Release`**.
-
-### Opción 1: Descargar / Generar desde AI Studio
-1. Abre el menú de configuración (**Settings / Export**) en AI Studio.
-2. Selecciona **Push to GitHub** para subir este repositorio directamente a tu cuenta.
-3. Para obtener el instalador optimizado, genera el paquete desde la opción de exportación o mediante el flujo de **GitHub Actions** incluido en `.github/workflows/android-release.yml`.
-
-### Opción 2: Publicación Automática en GitHub Releases (GitHub Actions)
-Este repositorio incluye el flujo automatizado `.github/workflows/android-release.yml` que:
-- Compila exclusivamente la variante **`Release`** (`gradle :app:assembleRelease :app:bundleRelease`).
-- Se activa automáticamente al publicar un tag con formato `v*` (por ejemplo, `v1.0.0-beta.1`) o manualmente desde la pestaña **Actions → Build & Publish Otter Local LLM Release (Beta)**.
-- Sube el archivo **`Otter-Local-LLM-v1.0.0-beta.1-release.apk`** listo para instalar en dispositivos de prueba.
-
-### Opción 3: Compilación Local por Línea de Comandos
-```bash
-# Generar APK en modo Release
-gradle :app:assembleRelease
-
-# Generar Android App Bundle (AAB) en modo Release
-gradle :app:bundleRelease
-```
-Los archivos generados se ubicarán en:
-- **APK Release:** `app/build/outputs/apk/release/app-release.apk`
-- **AAB Release:** `app/build/outputs/bundle/release/app-release.aab`
 
 ---
 
