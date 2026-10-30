@@ -1,20 +1,20 @@
-# 🦦 Otter Local LLM — APK Release (`v1.0.0-beta.2`)
+# 🦦 Otter Local LLM — APK Release (`v1.0.1-beta`)
 
-Bienvenido a la versión **v1.0.0-beta.2** de **Otter Local LLM** (Application ID: `com.diero777.otterlocalllm`), diseñada y compilada en modo **Release** (no debug), optimizada con firma criptográfica y lista para pruebas de campo en dispositivos Android.
+Bienvenido a la versión **v1.0.1-beta** de **Otter Local LLM** (Application ID: `com.diero777.otterlocalllm`), compilada en modo **Release** (no debug), optimizada con firma criptográfica y lista para pruebas de campo en dispositivos Android.
 
 ---
 
 ## 📦 Contenido de esta Entrega
 
-- **APK de Producción / Release:** `release/Otter-Local-LLM-v1.0.0-beta.2-release.apk`
+- **APK de Producción / Release:** `release/Otter-Local-LLM-v1.0.1-beta-release.apk`
 - **Application ID:** `com.diero777.otterlocalllm`
-- **Versión de la App:** `1.0.0-beta.2` (versionCode: `2`)
+- **Versión de la App:** `1.0.1-beta` (versionCode: `3`)
 - **Firma:** Certificado RSA de 2048 bits (`upload`)
 - **Tipo de Compilación:** `Release` (sin flags de debug, compatible con instalación directa en Android)
 
 ---
 
-## 🚀 Nuevas Funcionalidades en `v1.0.0-beta.2`
+## 🚀 Nuevas Funcionalidades en `v1.0.1-beta`
 
 ### 1. 📷 Entrada Multimodal de Imágenes & OCR
 - **Botón de Foto / OCR:** El botón de imágenes ahora permite seleccionar fotos desde la galería o capturarlas con la cámara mediante el selector nativo de Android (zero permissions).
@@ -56,14 +56,3 @@ Bienvenido a la versión **v1.0.0-beta.2** de **Otter Local LLM** (Application I
 | **Memoria RAM** | 3 GB RAM (Modo Nube) | 6 GB a 12 GB RAM | 3 GB RAM |
 | **Espacio Libre en Disco** | 500 MB (para cache) | 4 GB a 8 GB (para modelos GGUF) | 200 MB |
 | **Procesador sugerido** | Snapdragon 680 / Helio G88 | Snapdragon 7+ Gen 2 / 8 Gen 1 / 8 Gen 2 / Dimensity 8200+ | Cualquier procesador |
-
----
-
-## 📥 ¿Cómo Descargar y Probar el APK Release?
-
-1. **Desde AI Studio:**
-   - En la esquina superior derecha, selecciona el menú de exportación y haz clic en **Download ZIP**.
-   - El archivo `Otter-Local-LLM-v1.0.0-beta.2-release.apk` estará en la carpeta `release/`.
-2. **Mediante GitHub Actions:**
-   - Haz clic en **Push to GitHub** desde AI Studio.
-   - En tu repositorio de GitHub, el flujo `.github/workflows/android-release.yml` compila el release firmado y publica el Release con los binarios listos para descarga.

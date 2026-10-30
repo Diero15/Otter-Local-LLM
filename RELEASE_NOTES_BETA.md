@@ -1,58 +1,73 @@
-# 🦦 Guía para Subir a GitHub y Publicar el Release Beta (`v1.0.0-beta.2`)
+# 🦦 Publicación en GitHub Releases — Versión `v1.0.1-beta`
 
-Aquí tienes los textos listos para copiar y pegar al subir tu repositorio a GitHub y al crear tu nuevo **Release (`v1.0.0-beta.2`)**.
-
----
-
-## 1. Descripción corta para el repositorio de GitHub (Sección "About")
-
-Copia y pega esta línea en el campo **Description** de tu repositorio en GitHub:
-
-```text
-🦦 Otter Local LLM (Beta 2) — Inferencia local GGUF en RAM y Cloud AI OpenCode con visión multimodal/OCR, ejecución de código HTML5 unificado y scripts Python en Android. (com.diero777.otterlocalllm)
-```
-
-**Topics sugeridos para GitHub:**
-`android` `llm` `gguf` `edge-ai` `opencode` `local-llm` `kotlin` `jetpack-compose` `vision-ocr` `html5-sandbox` `offline-ai` `otter-llm`
+Aquí tienes los datos exactos listos para copiar y pegar en tu repositorio de GitHub para publicar el nuevo **Release (`v1.0.1-beta`)**:
 
 ---
 
-## 2. Plantilla para la Publicación en "GitHub Releases" (`v1.0.0-beta.2` - MODO RELEASE)
+### 📋 Campos del Formulario de GitHub Release
 
-Al crear el Release en GitHub:
-- **Tag version:** `v1.0.0-beta.2`
-- **Release title:** `🦦 Otter Local LLM v1.0.0-beta.2 (Beta de Pruebas - Multimodal OCR & OpenCode Cloud)`
-- **Marca la casilla:** ✅ *Set as a pre-release* (versión Beta para testers).
-- **Archivo adjunto:** `release/Otter-Local-LLM-v1.0.0-beta.2-release.apk` (o descárgalo desde la carpeta `release/` del proyecto).
+- **Tag version:** `v1.0.1-beta`
+- **Target:** `main` (o `master`)
+- **Release title:** `🦦 Otter Local LLM v1.0.1-beta — Visión Multimodal / OCR & OpenCode Cloud Engine`
+- **Casillas a marcar:** 
+  - ✅ **Set as a pre-release** *(Muy importante: marca esto para indicar que es versión beta de pruebas).*
+- **Archivo adjunto (Binario):** 
+  - Arrastra el archivo: `release/Otter-Local-LLM-v1.0.1-beta-release.apk` (o descárgalo desde la carpeta `release/`).
 
-### Descripción del Release (Copiar y pegar en GitHub):
+---
+
+### 📝 Descripción del Release (Markdown para copiar y pegar en GitHub):
 
 ```markdown
-## ⚠️ Versión Beta Pública para Pruebas (`v1.0.0-beta.2` — Compilación Release)
+# 🦦 Otter Local LLM — v1.0.1-beta (Compilación Release Optimizada)
 
-Esta es la segunda versión **Beta de pruebas** de **Otter Local LLM** (`com.diero777.otterlocalllm`), compilada en modo **`Release`** (sin sobrecarga de depuración) con firma digital RSA para probar tanto la inferencia local en RAM como la ejecución en la nube.
+¡Segunda versión beta pública de **Otter Local LLM** (`com.diero777.otterlocalllm`)! Compilada en modo **`Release`** con firma digital RSA y optimizaciones nativas para evaluar el rendimiento real en dispositivos Android.
 
-### 🌟 Novedades Destacadas en esta Versión (`v1.0.0-beta.2`):
-1. **📷 Entrada Multimodal de Fotos & OCR (Visión Artificial):**
-   - El botón de imágenes ahora se utiliza para **adjuntar fotos o capturas de la galería/cámara** (zero permissions, Android Photo Picker).
-   - Los modelos de IA con soporte de visión analizan la foto para **extraer texto (OCR de documentos, facturas, letreros), describir objetos y responder dudas sobre la imagen**.
-2. **💻 Código Web Unificado (HTML + CSS + JS en un solo mensaje):**
-   - El agente de IA genera páginas web completas autocontenidas (`<!DOCTYPE html>`, estilos `<style>` y lógica `<script>`) dentro de un único bloque de código.
-   - El visor interactivo `▶ Play` ejecuta la aplicación web completa al instante en el sandbox seguro.
-3. **☁️ Integración de OpenCode Cloud AI vía API Key:**
-   - Permite alternar en un toque entre el motor **Local GGUF (en RAM)** y la **Nube de OpenCode** con streaming en tiempo real.
-   - Soporte para 3 niveles de suscripción:
-     - 🆓 **Gratis (Free):** `opencode/free`, `google/gemini-2.0-flash-exp:free`, `qwen/qwen-2.5-coder-32b-instruct:free`, `meta-llama/llama-3.2-3b-instruct:free`, `deepseek/deepseek-r1:free`.
-     - ⚡ **Go:** `opencode/go`, `deepseek/deepseek-chat`, `openai/gpt-4o-mini`, `anthropic/claude-3-haiku`, `meta-llama/llama-3.3-70b-instruct`.
-     - 👑 **Premium:** `opencode/premium`, `anthropic/claude-3.5-sonnet`, `openai/gpt-4o`, `openai/o1`, `google/gemini-2.0-pro-exp-02-05`.
-4. **🛑 Control de Solicitud en Tiempo Real:** Botón de Stop para cancelar la respuesta en cualquier momento tanto en la nube como en local.
+Esta versión introduce dos grandes saltos evolutivos: **visión artificial multimodal con OCR** y soporte para **OpenCode Cloud AI**, permitiendo correr tanto modelos 100% offline en la RAM del teléfono como potentes modelos en la nube mediante API key.
 
-### 📱 Teléfonos Compatibles y Requisitos para Testers
-- **Arquitectura obligatoria:** Procesador de 64 bits (`arm64-v8a` o `x86_64`) con **Android 7.0+ (API 24+)** (recomendado Android 11+).
-- **Modo OpenCode Cloud:** Funciona en cualquier teléfono Android con al menos 3 GB de RAM y conexión a internet.
-- **Modo Local GGUF (en RAM):**
-  - **4 GB de RAM:** Modelos de 0.5B a 1.5B (ej. *Qwen 2.5 0.5B*, *TinyLlama 1.1B*).
-  - **6 GB a 8 GB de RAM:** Modelos de 1.5B a 3.8B en `Q4_K_M` (ej. *Qwen 2.5 Coder 1.5B/3B*, *Gemma 2 2B*, *Llama 3.2 3B*).
-  - **12 GB a 16 GB+ de RAM:** Modelos de 7B a 8B en `Q4_K_M`.
-- **Almacenamiento:** Mínimo 2 GB libres para almacenar modelos `.gguf` en memoria interna o tarjeta SD.
+---
+
+### 🌟 Novedades Principales en `v1.0.1-beta`
+
+#### 📷 1. Inspección Visual Multimodal & OCR
+- **Adjuntado de Fotos Directo:** El botón de fotos en el chat ahora se utiliza para seleccionar imágenes de la galería o tomar fotos con la cámara mediante el selector seguro de Android (cero permisos intrusivos).
+- **Extracción de Texto (OCR) y Análisis:** Los modelos de IA con soporte de visión analizan la foto para transcribir recibos, carteles o códigos, describir detalles visuales y resolver dudas paso a paso sobre la imagen.
+- **Previsualización con Miniatura:** Muestra tarjeta flotante con miniatura, tamaño en KB y botón rápido para descartar antes del envío.
+
+#### 🌐 2. Generación de Código Web Unificado (HTML5 + CSS + JS)
+- **Documento Completo Autocontenido:** El agente de programación genera todo el proyecto web (`<!DOCTYPE html>`, estilos `<style>` y scripts `<script>`) dentro de un único bloque de código estructurado.
+- **Ejecución Instantánea con `▶ Play`:** El visor integrado ejecuta la aplicación frontend completa al instante con sandbox seguro, pestañas de inspección y consola JavaScript en vivo.
+
+#### ☁️ 3. Motor OpenCode Cloud AI vía API Key (Gratis, Go & Premium)
+- **Alternador de Motor en 1 Toque:** Alterna cómodamente entre el motor **Local GGUF (en RAM física)** y la nube **OpenCode Cloud AI**.
+- **Modelos Integrados por Tier:**
+  - 🆓 **Gratis (Free):** `opencode/free`, `google/gemini-2.0-flash-exp:free` (Visión/OCR), `qwen/qwen-2.5-coder-32b-instruct:free` (Código), `meta-llama/llama-3.2-3b-instruct:free`, `deepseek/deepseek-r1:free` (Razonamiento analítico).
+  - ⚡ **Go:** `opencode/go`, `deepseek/deepseek-chat`, `openai/gpt-4o-mini`, `anthropic/claude-3-haiku`, `meta-llama/llama-3.3-70b-instruct`.
+  - 👑 **Premium:** `opencode/premium`, `anthropic/claude-3.5-sonnet`, `openai/gpt-4o`, `openai/o1`, `google/gemini-2.0-pro-exp-02-05`.
+- **Streaming SSE y Control Total:** Flujo continuo de respuestas con contador de velocidad (tokens/s) y botón **Detener (Stop)** inmediato.
+
+#### 🧠 4. Motor Local GGUF (llama.cpp JNI en RAM)
+- Carga modelos `.gguf` directamente en la RAM física del teléfono sin depender de servidores ni internet.
+- Monitor de memoria RAM en tiempo real con sistema de descarga rápida y gestión inteligente ante eventos de memoria baja del sistema.
+
+---
+
+### 📱 Especificaciones Técnicas y Compatibilidad
+
+| Modo de Uso | RAM Mínima | Procesador Sugerido | Espacio Libre |
+|---|---|---|---|
+| **OpenCode Cloud AI** | 3 GB RAM | Cualquier CPU (Snapdragon, Helio, Exynos, Unisoc) | 200 MB |
+| **GGUF Local (0.5B a 1.5B)** | 4 GB RAM | Snapdragon 680 / Helio G85 o superior | 1.5 GB a 2.5 GB |
+| **GGUF Local (2B a 3.8B)** | 6 GB a 8 GB RAM | Snapdragon 7+ Gen 2 / 8 Gen 1 / Dimensity 8000+ | 3 GB a 5 GB |
+| **GGUF Local (7B a 8B)** | 12 GB a 16 GB RAM | Snapdragon 8 Gen 2 / 8 Gen 3 / Dimensity 9200+ | 6 GB a 10 GB |
+
+> **Arquitectura requerida:** Android 7.0+ (API 24 o superior) en arquitectura de 64 bits (`arm64-v8a` o `x86_64`).
+
+---
+
+### 📥 Instalación
+
+1. Descarga el archivo `Otter-Local-LLM-v1.0.1-beta-release.apk` adjunto en este release.
+2. Ábrelo en tu teléfono Android y autoriza la instalación de fuentes desconocidas si es necesario.
+3. ¡Comienza a chatear, ejecutar scripts o probar tus modelos locales y en la nube!
 ```
