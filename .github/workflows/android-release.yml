@@ -47,7 +47,11 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'gradle'
+
+      - name: Setup Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
 
       - name: Ensure Android SDK environment
         run: |
@@ -56,11 +60,13 @@ jobs:
 
       - name: Prepare Release Signing Keystore
         run: |
-          if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+          if [ -f "my-upload-key.jks" ]; then
+            echo "Keystore existente my-upload-key.jks encontrado en el repositorio. Usándolo directamente."
+          elif [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            echo "Generando keystore desde secret RELEASE_KEYSTORE_BASE64..."
             echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
-            echo "STORE_PASSWORD=${{ secrets.STORE_PASSWORD }}" >> $GITHUB_ENV
-            echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
           else
+            echo "Generando nuevo keystore my-upload-key.jks..."
             keytool -genkeypair -v \
               -keystore my-upload-key.jks \
               -alias upload \
@@ -70,19 +76,28 @@ jobs:
               -storepass otterrelease123 \
               -keypass otterrelease123 \
               -dname "CN=diero777, OU=OtterLocalLLM, O=diero777, L=Global, S=Global, C=US"
-            echo "STORE_PASSWORD=otterrelease123" >> $GITHUB_ENV
-            echo "KEY_PASSWORD=otterrelease123" >> $GITHUB_ENV
           fi
           echo "KEYSTORE_PATH=${GITHUB_WORKSPACE}/my-upload-key.jks" >> $GITHUB_ENV
+          echo "STORE_PASSWORD=otterrelease123" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=otterrelease123" >> $GITHUB_ENV
 
       - name: Build Release APK and AAB with Gradle
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
-          STORE_PASSWORD: ${{ env.STORE_PASSWORD || secrets.STORE_PASSWORD || 'otterrelease123' }}
-          KEY_PASSWORD: ${{ env.KEY_PASSWORD || secrets.KEY_PASSWORD || 'otterrelease123' }}
+          STORE_PASSWORD: otterrelease123
+          KEY_PASSWORD: otterrelease123
         run: |
-          chmod +x gradlew
-          ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+          if [ -f "./gradlew" ]; then
+            chmod +x gradlew
+          fi
+          
+          if [ -x "./gradlew" ] && [ -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "Usando ./gradlew wrapper..."
+            ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+          else
+            echo "Usando gradle global del runner..."
+            gradle :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+          fi
 
       - name: Organize Release Binaries
         run: |
@@ -98,7 +113,7 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "release/Otter-Local-LLM-v1.0.1-beta-release.apk"
           cp app/build/outputs/apk/release/app-release.apk "Otter-Local-LLM-release.apk"
           
-          echo "Listado de binarios en release/:"
+          echo "Listado de binarios listos en release/:"
           ls -lh release/
 
       - name: Upload Release APK as GitHub Action Artifact
@@ -124,7 +139,9 @@ jobs:
           body_path: RELEASE_NOTES_BETA.md
           prerelease: true
           draft: false
+          fail_on_unmatched_files: false
           files: |
             release/*.apk
             release/*.aab
-            Otter-Local-LLM-release.apk
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
