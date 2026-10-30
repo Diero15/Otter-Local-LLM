@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -58,6 +59,24 @@ import com.example.domain.InferenceConfig
 import com.example.domain.MemorySnapshot
 import com.example.domain.ModelRuntimeInfo
 import com.example.domain.SystemPersona
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
+import com.example.domain.AttachedImageData
+import com.example.domain.ExecutionEngineMode
+import com.example.domain.OpenCodeModelSpec
+import com.example.domain.OpenCodeTier
 import com.example.ui.AttachedSmallFile
 import com.example.ui.StreamingUiState
 import com.example.ui.components.CodeSandboxDialog
@@ -100,10 +119,10 @@ fun parseMessageSegments(rawContent: String): List<MessageContentSegment> {
     }
     remainingContent = remainingContent.replace(imgTagRegex, "").trim()
 
-    // 2. Extraer imágenes Markdown ![alt](https://...)
-    val mdImgRegex = Regex("""!\[([^\]]*)\]\((https?://[^\)]+)\)""")
+    // 2. Extraer imágenes Markdown ![alt](url) incluyendo data:image/base64 y content://
+    val mdImgRegex = Regex("""!\[([^\]]*)\]\((https?://[^\)]+|data:image/[^\)]+|content://[^\)]+)\)""")
     mdImgRegex.findAll(remainingContent).forEach { match ->
-        val alt = match.groupValues[1].ifBlank { "Imagen generada" }
+        val alt = match.groupValues[1].ifBlank { "Foto adjunta" }
         val url = match.groupValues[2].trim()
         segments.add(MessageContentSegment.GeneratedImage(prompt = alt, directUrl = url))
     }
@@ -279,6 +298,345 @@ fun formatCodeWithProperIndentation(rawCode: String, language: String): String {
     return result.joinToString("\n")
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OpenCodeConfigDialog(
+    currentEngineMode: ExecutionEngineMode,
+    currentTier: OpenCodeTier,
+    currentModel: OpenCodeModelSpec,
+    apiKey: String,
+    baseUrl: String,
+    onSelectEngineMode: (ExecutionEngineMode) -> Unit,
+    onSelectTier: (OpenCodeTier) -> Unit,
+    onSelectModel: (OpenCodeModelSpec) -> Unit,
+    onSaveApiKey: (String) -> Unit,
+    onSaveBaseUrl: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var tempKey by remember(apiKey) { mutableStateOf(apiKey) }
+    var tempUrl by remember(baseUrl) { mutableStateOf(baseUrl) }
+    var keyVisible by remember { mutableStateOf(false) }
+    var selectedTabTier by remember(currentTier) { mutableStateOf(currentTier) }
+    var selectedEngine by remember(currentEngineMode) { mutableStateOf(currentEngineMode) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.88f),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Cabecera del diálogo
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Cloud,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column {
+                            Text(
+                                text = "Motor IA & OpenCode Cloud",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Inferencia Local en RAM o Nube con API Key",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar")
+                    }
+                }
+
+                // Contenido desplazable
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    // 1. Selector de Motor: Local GGUF vs OpenCode Cloud
+                    Text(
+                        text = "1. Modo de Inferencia Activo",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            onClick = { selectedEngine = ExecutionEngineMode.LOCAL_GGUF },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (selectedEngine == ExecutionEngineMode.LOCAL_GGUF)
+                                MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                            border = if (selectedEngine == ExecutionEngineMode.LOCAL_GGUF)
+                                androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                            else null,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = "📱 Local (GGUF)",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "100% privado en RAM mediante llama.cpp. Sin Internet ni API Key.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Surface(
+                            onClick = { selectedEngine = ExecutionEngineMode.OPENCODE_CLOUD },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (selectedEngine == ExecutionEngineMode.OPENCODE_CLOUD)
+                                MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                            border = if (selectedEngine == ExecutionEngineMode.OPENCODE_CLOUD)
+                                androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                            else null,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = "☁️ OpenCode Cloud",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Visión multimodal, OCR, modelos 32B/70B y agentes en la nube.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    if (selectedEngine == ExecutionEngineMode.OPENCODE_CLOUD) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                        // 2. Selector de Niveles OpenCode
+                        Text(
+                            text = "2. Nivel de Suscripción OpenCode",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            OpenCodeTier.entries.forEach { tier ->
+                                val isSelected = selectedTabTier == tier
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { selectedTabTier = tier },
+                                    label = { Text(tier.badge, fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = selectedTabTier.shortDesc,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        // 3. Catálogo de Modelos del nivel
+                        Text(
+                            text = "3. Seleccionar Modelo (${selectedTabTier.label})",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        val tierModels = remember(selectedTabTier) {
+                            EdgeModelCatalog.openCodeModels.filter { it.tier == selectedTabTier }
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            tierModels.forEach { m ->
+                                val isChosen = currentModel.id == m.id
+                                Surface(
+                                    onClick = { onSelectModel(m) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isChosen) MaterialTheme.colorScheme.secondaryContainer
+                                    else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    border = if (isChosen) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.secondary) else null,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        RadioButton(
+                                            selected = isChosen,
+                                            onClick = { onSelectModel(m) }
+                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = m.name,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                if (m.supportsVision) {
+                                                    Surface(
+                                                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                                                        shape = RoundedCornerShape(4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "📷 Visión / OCR",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                                            fontSize = 9.sp
+                                                        )
+                                                    }
+                                                }
+                                                if (m.supportsCode) {
+                                                    Surface(
+                                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                                        shape = RoundedCornerShape(4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "💻 Código",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                                            fontSize = 9.sp
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            Text(
+                                                text = "${m.provider} • ${m.description}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                        // 4. API Key de OpenCode
+                        Text(
+                            text = "4. Clave API de OpenCode",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        OutlinedTextField(
+                            value = tempKey,
+                            onValueChange = { tempKey = it },
+                            label = { Text("OpenCode / OpenRouter API Key") },
+                            placeholder = { Text("sk-or-v1-...") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { keyVisible = !keyVisible }) {
+                                    Icon(
+                                        imageVector = if (keyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = "Mostrar u ocultar clave"
+                                    )
+                                }
+                            }
+                        )
+
+                        Text(
+                            text = "💡 Para los modelos con etiqueta 'Gratis (Free)' puedes probarlos sin costo. Para la suscripción Go o Premium ingresa tu clave API.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        // 5. Endpoint Base URL
+                        OutlinedTextField(
+                            value = tempUrl,
+                            onValueChange = { tempUrl = it },
+                            label = { Text("Endpoint Base URL (Opcional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+                }
+
+                // Barra inferior de acciones
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = onDismiss) {
+                            Text("Cancelar")
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                onSelectEngineMode(selectedEngine)
+                                onSelectTier(selectedTabTier)
+                                onSaveApiKey(tempKey)
+                                onSaveBaseUrl(tempUrl)
+                                onDismiss()
+                            }
+                        ) {
+                            Text("Guardar y Aplicar")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun ChatScreen(
     sessions: List<ChatSessionEntity>,
@@ -291,6 +649,12 @@ fun ChatScreen(
     loadedModel: ModelRuntimeInfo?,
     memorySnapshot: MemorySnapshot,
     attachedSmallFile: AttachedSmallFile? = null,
+    attachedImage: AttachedImageData? = null,
+    executionEngineMode: ExecutionEngineMode = ExecutionEngineMode.LOCAL_GGUF,
+    openCodeApiKey: String = "",
+    openCodeBaseUrl: String = "https://openrouter.ai/api/v1/chat/completions",
+    selectedOpenCodeTier: OpenCodeTier = OpenCodeTier.FREE,
+    selectedOpenCodeModel: OpenCodeModelSpec = EdgeModelCatalog.openCodeModels.first(),
     webSearchEnabled: Boolean = false,
     imageGenerationEnabled: Boolean = false,
     onSelectSession: (ChatSessionEntity) -> Unit,
@@ -302,6 +666,13 @@ fun ChatScreen(
     onStopGeneration: () -> Unit = {},
     onAttachSmallFile: (Uri) -> Unit = {},
     onClearAttachedFile: () -> Unit = {},
+    onAttachImage: (Uri) -> Unit = {},
+    onClearAttachedImage: () -> Unit = {},
+    onSelectEngineMode: (ExecutionEngineMode) -> Unit = {},
+    onUpdateOpenCodeApiKey: (String) -> Unit = {},
+    onUpdateOpenCodeBaseUrl: (String) -> Unit = {},
+    onSelectOpenCodeTier: (OpenCodeTier) -> Unit = {},
+    onSelectOpenCodeModel: (OpenCodeModelSpec) -> Unit = {},
     onToggleWebSearch: (Boolean) -> Unit = {},
     onToggleImageGeneration: (Boolean) -> Unit = {},
     onSelectPersonaQuick: (SystemPersona) -> Unit = {},
@@ -312,27 +683,58 @@ fun ChatScreen(
     var prompt by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    // Visor de ejecución de código (se activa únicamente al pulsar Play en un bloque de código o mensaje con código)
+    // Visor de ejecución de código (HTML Sandbox / Python runner)
     var sandboxRequest by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-    // Menú desplegable de opciones en el botón de Prompt encima del input
+    // Diálogo de configuración de OpenCode Cloud y Motor
+    var showOpenCodeConfigDialog by remember { mutableStateOf(false) }
+
+    // Menú desplegable de opciones en el botón de Prompt
     var showPromptOptionsMenu by remember { mutableStateOf(false) }
 
-    // Determinar si el modelo cargado actualmente soporta creación de imágenes (TEXT_AND_IMAGE)
-    val modelSupportsImages = loadedModel?.spec?.capability?.supportsImages == true
-    val effectiveImageCreationEnabled = modelSupportsImages && imageGenerationEnabled
+    // Determinar si el modelo cargado actualmente soporta visión/imágenes
+    val modelSupportsImages = if (executionEngineMode == ExecutionEngineMode.OPENCODE_CLOUD) {
+        selectedOpenCodeModel.supportsVision
+    } else {
+        loadedModel?.spec?.capability?.supportsImages == true
+    }
 
-    // Detectar apertura del teclado en pantalla para mantener el último mensaje y el input visibles a la altura del teclado
+    // Detectar apertura del teclado en pantalla
     val density = androidx.compose.ui.platform.LocalDensity.current
     val imeBottomPx = WindowInsets.ime.getBottom(density)
 
-    // Selector de archivos pequeños (.txt, .md, código fuente)
+    // Selector de archivos pequeños (.txt, .md, código)
     val smallFilePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
             onAttachSmallFile(uri)
         }
+    }
+
+    // Selector de Fotos / Galería para análisis visual y OCR Multimodal (Zero-permission Android Photo Picker)
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            onAttachImage(uri)
+        }
+    }
+
+    if (showOpenCodeConfigDialog) {
+        OpenCodeConfigDialog(
+            currentEngineMode = executionEngineMode,
+            currentTier = selectedOpenCodeTier,
+            currentModel = selectedOpenCodeModel,
+            apiKey = openCodeApiKey,
+            baseUrl = openCodeBaseUrl,
+            onSelectEngineMode = onSelectEngineMode,
+            onSelectTier = onSelectOpenCodeTier,
+            onSelectModel = onSelectOpenCodeModel,
+            onSaveApiKey = onUpdateOpenCodeApiKey,
+            onSaveBaseUrl = onUpdateOpenCodeBaseUrl,
+            onDismiss = { showOpenCodeConfigDialog = false }
+        )
     }
 
     // Auto-scroll al último mensaje cuando llega un nuevo mensaje, durante el streaming o al desplegarse el teclado
@@ -469,7 +871,68 @@ fun ChatScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
-                // Pastilla visual si el usuario adjuntó un archivo pequeño (.txt, .md, .py, .js, etc.)
+                // 1. Pastilla visual de Foto Adjunta para Análisis Visual / OCR
+                if (attachedImage != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                AsyncImage(
+                                    model = attachedImage.uri,
+                                    contentDescription = "Foto adjunta para análisis visual u OCR",
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Column {
+                                    Text(
+                                        text = attachedImage.fileName,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "📷 Foto lista para análisis visual / OCR (${(attachedImage.sizeBytes / 1024L).coerceAtLeast(1L)} KB)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                                    )
+                                }
+                            }
+
+                            IconButton(
+                                onClick = onClearAttachedImage,
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Quitar foto adjunta",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 2. Pastilla visual si el usuario adjuntó un archivo pequeño (.txt, .md, código)
                 if (attachedSmallFile != null) {
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer,
@@ -506,7 +969,7 @@ fun ChatScreen(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = "Archivo .${attachedSmallFile.extension} listo para enviar al modelo (${(attachedSmallFile.sizeBytes / 1024L).coerceAtLeast(1L)} KB)",
+                                        text = "Archivo .${attachedSmallFile.extension} (${(attachedSmallFile.sizeBytes / 1024L).coerceAtLeast(1L)} KB)",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
                                     )
@@ -528,21 +991,31 @@ fun ChatScreen(
                     }
                 }
 
-                // Fila de controles ubicada encima del input de mensaje
+                // 3. Fila de controles ubicada encima del input de mensaje
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 1. Chip de Modelo Activo en RAM mostrando su capacidad (Texto, Código o Texto+Imágenes)
+                    // Chip de Modo / Modelo Activo (Local GGUF vs OpenCode Cloud)
                     AssistChip(
-                        onClick = onOpenModelStore,
+                        onClick = {
+                            if (executionEngineMode == ExecutionEngineMode.OPENCODE_CLOUD) {
+                                showOpenCodeConfigDialog = true
+                            } else {
+                                onOpenModelStore()
+                            }
+                        },
                         label = {
-                            val modelChipText = loadedModel?.let {
-                                "${it.spec.capability.badge} • ${it.spec.name}"
-                            } ?: "Cargar Modelo"
+                            val chipText = if (executionEngineMode == ExecutionEngineMode.OPENCODE_CLOUD) {
+                                "☁️ ${selectedOpenCodeModel.tier.badge} • ${selectedOpenCodeModel.name}"
+                            } else {
+                                loadedModel?.let {
+                                    "📱 ${it.spec.capability.badge} • ${it.spec.name}"
+                                } ?: "Cargar Modelo RAM"
+                            }
                             Text(
-                                text = modelChipText,
+                                text = chipText,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 fontSize = 11.sp
@@ -554,7 +1027,8 @@ fun ChatScreen(
                                     .size(8.dp)
                                     .clip(CircleShape)
                                     .background(
-                                        if (loadedModel != null) MaterialTheme.colorScheme.secondary
+                                        if (executionEngineMode == ExecutionEngineMode.OPENCODE_CLOUD) Color(0xFF7AA2F7)
+                                        else if (loadedModel != null) MaterialTheme.colorScheme.secondary
                                         else MaterialTheme.colorScheme.error
                                     )
                             )
@@ -562,17 +1036,44 @@ fun ChatScreen(
                         modifier = Modifier
                             .weight(1f, fill = false)
                             .height(32.dp)
-                            .testTag("active_model_chip")
+                            .testTag("active_engine_chip")
                     )
 
-                    // 2. Botón para cargar archivos pequeños de código, .txt o .md
+                    // Botón FOTO / VISIÓN / OCR (Android Photo Picker directo)
+                    AssistChip(
+                        onClick = {
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        label = {
+                            Text(
+                                text = if (attachedImage != null) "1 Foto" else "Foto/OCR",
+                                fontSize = 11.sp,
+                                maxLines = 1
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.AddPhotoAlternate,
+                                contentDescription = "Adjuntar foto para análisis visual u OCR",
+                                modifier = Modifier.size(14.dp),
+                                tint = if (attachedImage != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        modifier = Modifier
+                            .height(32.dp)
+                            .testTag("attach_photo_chip")
+                    )
+
+                    // Botón para cargar archivos de texto o código
                     AssistChip(
                         onClick = {
                             smallFilePickerLauncher.launch(arrayOf("*/*"))
                         },
                         label = {
                             Text(
-                                text = if (attachedSmallFile != null) "1 Archivo" else ".txt / Código",
+                                text = if (attachedSmallFile != null) "1 Archivo" else "Código",
                                 fontSize = 11.sp,
                                 maxLines = 1
                             )
@@ -580,7 +1081,7 @@ fun ChatScreen(
                         leadingIcon = {
                             Icon(
                                 Icons.Default.AttachFile,
-                                contentDescription = "Cargar archivo pequeño de texto, markdown o código",
+                                contentDescription = "Cargar archivo pequeño de texto o código",
                                 modifier = Modifier.size(14.dp)
                             )
                         },
@@ -589,32 +1090,35 @@ fun ChatScreen(
                             .testTag("attach_small_file_chip")
                     )
 
-                    // 3. Botón de Prompt con menú de opciones (Búsqueda en Internet, Creación de Imágenes condicional y Personalidad)
+                    // Botón de Opciones del Motor IA / OpenCode / System Prompt
                     Box {
                         AssistChip(
                             onClick = { showPromptOptionsMenu = true },
                             label = {
-                                val indicators = buildString {
-                                    append(activePersona.badge)
+                                val labelText = buildString {
+                                    if (executionEngineMode == ExecutionEngineMode.OPENCODE_CLOUD) {
+                                        append("☁️ Nube")
+                                    } else {
+                                        append(activePersona.badge)
+                                    }
                                     if (webSearchEnabled) append(" • 🌐")
-                                    if (effectiveImageCreationEnabled) append(" • 🎨")
                                 }
                                 Text(
-                                    text = indicators,
+                                    text = labelText,
                                     fontSize = 11.sp,
                                     maxLines = 1
                                 )
                             },
                             leadingIcon = {
                                 Icon(
-                                    Icons.Default.Psychology,
-                                    contentDescription = "Opciones de Prompt y Búsqueda en Internet",
-                                    modifier = Modifier.size(15.dp)
+                                    imageVector = if (executionEngineMode == ExecutionEngineMode.OPENCODE_CLOUD) Icons.Default.Cloud else Icons.Default.Psychology,
+                                    contentDescription = "Opciones del Motor y Prompt",
+                                    modifier = Modifier.size(14.dp)
                                 )
                             },
                             modifier = Modifier
                                 .height(32.dp)
-                                .testTag("persona_chip")
+                                .testTag("engine_options_chip")
                         )
 
                         DropdownMenu(
@@ -622,24 +1126,114 @@ fun ChatScreen(
                             onDismissRequest = { showPromptOptionsMenu = false }
                         ) {
                             Text(
-                                text = "Opciones del Modelo (${loadedModel?.spec?.capability?.badge ?: "📝 Texto"})",
+                                text = "Motor de Inferencia",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                             )
 
-                            // Opción 1: Búsqueda de información adicional en Internet
+                            // Opción A: Motor Local GGUF
                             DropdownMenuItem(
                                 text = {
                                     Column {
                                         Text(
-                                            text = "Búsqueda de información adicional",
+                                            text = "📱 Motor Local GGUF (en RAM)",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = if (executionEngineMode == ExecutionEngineMode.LOCAL_GGUF) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                        Text(
+                                            text = "100% privado en tu teléfono, sin Internet",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
+                                trailingIcon = if (executionEngineMode == ExecutionEngineMode.LOCAL_GGUF) {
+                                    {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                } else null,
+                                onClick = {
+                                    onSelectEngineMode(ExecutionEngineMode.LOCAL_GGUF)
+                                    showPromptOptionsMenu = false
+                                }
+                            )
+
+                            // Opción B: OpenCode Cloud AI
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(
+                                            text = "☁️ OpenCode Cloud AI",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = if (executionEngineMode == ExecutionEngineMode.OPENCODE_CLOUD) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                        Text(
+                                            text = "Modelos Gratis, Go y Premium con Visión & OCR",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
+                                trailingIcon = if (executionEngineMode == ExecutionEngineMode.OPENCODE_CLOUD) {
+                                    {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                } else null,
+                                onClick = {
+                                    onSelectEngineMode(ExecutionEngineMode.OPENCODE_CLOUD)
+                                    showPromptOptionsMenu = false
+                                }
+                            )
+
+                            // Opción C: Configurar OpenCode Cloud (API Key, modelos, tiers)
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "⚙️ Configurar OpenCode (API Key & Modelos)...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Tune,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                onClick = {
+                                    showPromptOptionsMenu = false
+                                    showOpenCodeConfigDialog = true
+                                }
+                            )
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                            // Búsqueda de información adicional en Internet
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(
+                                            text = "Búsqueda en Internet",
                                             style = MaterialTheme.typography.bodySmall,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                         Text(
-                                            text = "Consulta Internet (Wikipedia / DuckDuckGo) para una mejor respuesta en texto",
+                                            text = "Wikipedia / DuckDuckGo para complementar la respuesta",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -659,57 +1253,6 @@ fun ChatScreen(
                                     )
                                 },
                                 onClick = { onToggleWebSearch(!webSearchEnabled) }
-                            )
-
-                            // Opción 2: Creación de imágenes (SOLO se habilita cuando el modelo descargado tiene capacidad TEXT_AND_IMAGE)
-                            DropdownMenuItem(
-                                enabled = modelSupportsImages,
-                                text = {
-                                    Column {
-                                        Text(
-                                            text = "Creación de imágenes",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (modelSupportsImages) MaterialTheme.colorScheme.onSurface
-                                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-                                        )
-                                        Text(
-                                            text = if (modelSupportsImages) {
-                                                if (effectiveImageCreationEnabled) "Activo: el input creará imágenes + descripción"
-                                                else "Desactivado: la IA local responderá en texto"
-                                            } else {
-                                                "Requiere modelo '🎨 Texto + Imágenes' en Model Store (La IA responderá en texto)"
-                                            },
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (modelSupportsImages) MaterialTheme.colorScheme.onSurfaceVariant
-                                            else MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
-                                        )
-                                    }
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Image,
-                                        contentDescription = null,
-                                        tint = if (effectiveImageCreationEnabled) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (modelSupportsImages) 1f else 0.4f)
-                                    )
-                                },
-                                trailingIcon = {
-                                    Switch(
-                                        checked = effectiveImageCreationEnabled,
-                                        enabled = modelSupportsImages,
-                                        onCheckedChange = {
-                                            if (modelSupportsImages) {
-                                                onToggleImageGeneration(it)
-                                            }
-                                        }
-                                    )
-                                },
-                                onClick = {
-                                    if (modelSupportsImages) {
-                                        onToggleImageGeneration(!effectiveImageCreationEnabled)
-                                    }
-                                }
                             )
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -748,34 +1291,10 @@ fun ChatScreen(
                                     }
                                 )
                             }
-
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = "Editar System Prompt y Parámetros...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Tune,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                onClick = {
-                                    showPromptOptionsMenu = false
-                                    onOpenPersonaConfig()
-                                }
-                            )
                         }
                     }
 
-                    // 4. Indicador rápido de RAM libre
+                    // 4. Indicador rápido de RAM o Nube
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = RoundedCornerShape(8.dp)
@@ -785,14 +1304,17 @@ fun ChatScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                Icons.Default.Memory,
-                                contentDescription = "RAM disponible",
+                                imageVector = if (executionEngineMode == ExecutionEngineMode.OPENCODE_CLOUD) Icons.Default.Cloud else Icons.Default.Memory,
+                                contentDescription = "Estado del motor",
                                 modifier = Modifier.size(13.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = "${memorySnapshot.availableDeviceRamMb}MB",
+                                text = if (executionEngineMode == ExecutionEngineMode.OPENCODE_CLOUD)
+                                    selectedOpenCodeTier.badge
+                                else
+                                    "${memorySnapshot.availableDeviceRamMb}MB",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -802,7 +1324,7 @@ fun ChatScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Fila del Input de mensaje + Botón dinámico Enviar / Stop
+                // 4. Fila del Input de mensaje + Botón dinámico Enviar / Stop
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -817,11 +1339,14 @@ fun ChatScreen(
                             Text(
                                 text = when {
                                     streamingState.isGenerating -> "Generando respuesta... Pulsa Stop para detener"
-                                    effectiveImageCreationEnabled -> "Creación de imágenes"
-                                    webSearchEnabled -> "Búsqueda de información adicional activa 🌐: escribe tu mensaje..."
-                                    else -> "Escribe un mensaje para generar respuesta en texto o código..."
+                                    attachedImage != null -> "Pregunta sobre la foto o pide extraer el texto (OCR)..."
+                                    executionEngineMode == ExecutionEngineMode.OPENCODE_CLOUD -> "Escribe a ${selectedOpenCodeModel.name}... (Genera HTML5 autocontenido)"
+                                    webSearchEnabled -> "Búsqueda en Internet activa 🌐: escribe tu mensaje..."
+                                    else -> "Escribe tu mensaje (Genera HTML5 completo con JS/CSS)..."
                                 },
-                                fontSize = 14.sp
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         },
                         shape = RoundedCornerShape(24.dp),
@@ -856,7 +1381,7 @@ fun ChatScreen(
                         }
                     } else {
                         // Botón ENVIAR normal
-                        val canSend = prompt.isNotBlank() || attachedSmallFile != null
+                        val canSend = prompt.isNotBlank() || attachedSmallFile != null || attachedImage != null
                         Button(
                             onClick = {
                                 if (canSend) {

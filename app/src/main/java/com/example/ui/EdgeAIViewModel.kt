@@ -45,6 +45,17 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.nio.charset.StandardCharsets
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import java.io.ByteArrayOutputStream
+import com.example.data.remote.OpenCodeService
+import com.example.domain.AttachedImageData
+import com.example.domain.ExecutionEngineMode
+import com.example.domain.OpenCodeModelSpec
+import com.example.domain.OpenCodeTier
+
 data class AttachedSmallFile(
     val fileName: String,
     val extension: String,
@@ -83,7 +94,8 @@ class EdgeAIViewModel(
     val aiEngine: AIEngine,
     val downloader: ModelDownloader,
     private val hfSearchService: HfModelSearchService = HfModelSearchService(),
-    private val webSearchService: WebSearchService = WebSearchService()
+    private val webSearchService: WebSearchService = WebSearchService(),
+    private val openCodeService: OpenCodeService = OpenCodeService()
 ) : AndroidViewModel(application) {
 
     val sessions: StateFlow<List<ChatSessionEntity>> = repository.allSessions
@@ -150,6 +162,27 @@ class EdgeAIViewModel(
     private val _attachedSmallFile = MutableStateFlow<AttachedSmallFile?>(null)
     val attachedSmallFile: StateFlow<AttachedSmallFile?> = _attachedSmallFile.asStateFlow()
 
+    // Foto o imagen adjunta para Análisis Visual / OCR Multimodal
+    private val _attachedImage = MutableStateFlow<AttachedImageData?>(null)
+    val attachedImage: StateFlow<AttachedImageData?> = _attachedImage.asStateFlow()
+
+    // Modo de Ejecución: Motor Local (GGUF en RAM) vs OpenCode Cloud AI
+    private val _executionEngineMode = MutableStateFlow(ExecutionEngineMode.LOCAL_GGUF)
+    val executionEngineMode: StateFlow<ExecutionEngineMode> = _executionEngineMode.asStateFlow()
+
+    // Configuración de OpenCode Cloud (API Key, Tier, Modelo y Endpoint)
+    private val _openCodeApiKey = MutableStateFlow("")
+    val openCodeApiKey: StateFlow<String> = _openCodeApiKey.asStateFlow()
+
+    private val _openCodeBaseUrl = MutableStateFlow("https://openrouter.ai/api/v1/chat/completions")
+    val openCodeBaseUrl: StateFlow<String> = _openCodeBaseUrl.asStateFlow()
+
+    private val _selectedOpenCodeTier = MutableStateFlow(OpenCodeTier.FREE)
+    val selectedOpenCodeTier: StateFlow<OpenCodeTier> = _selectedOpenCodeTier.asStateFlow()
+
+    private val _selectedOpenCodeModel = MutableStateFlow(EdgeModelCatalog.openCodeModels.first())
+    val selectedOpenCodeModel: StateFlow<OpenCodeModelSpec> = _selectedOpenCodeModel.asStateFlow()
+
     // Opciones del botón de Prompt: Búsqueda rápida en Internet y Generación de Imágenes
     private val _webSearchEnabled = MutableStateFlow(false)
     val webSearchEnabled: StateFlow<Boolean> = _webSearchEnabled.asStateFlow()
@@ -164,9 +197,45 @@ class EdgeAIViewModel(
 
     private var telemetryJob: Job? = null
 
+    private val prefs by lazy {
+        getApplication<Application>().getSharedPreferences("otter_ai_settings", Context.MODE_PRIVATE)
+    }
+
     init {
+        loadPersistedSettings()
         initializeDefaultSessionAndStorage()
         startTelemetryAndDownloadMonitor()
+    }
+
+    private fun loadPersistedSettings() {
+        val savedModeStr = prefs.getString("engine_mode", ExecutionEngineMode.LOCAL_GGUF.name)
+        val loadedMode = try {
+            ExecutionEngineMode.valueOf(savedModeStr ?: ExecutionEngineMode.LOCAL_GGUF.name)
+        } catch (e: Exception) {
+            ExecutionEngineMode.LOCAL_GGUF
+        }
+        _executionEngineMode.value = loadedMode
+
+        val savedApiKey = prefs.getString("opencode_api_key", "").orEmpty()
+        _openCodeApiKey.value = savedApiKey
+
+        val savedBaseUrl = prefs.getString("opencode_base_url", "https://openrouter.ai/api/v1/chat/completions")
+            ?: "https://openrouter.ai/api/v1/chat/completions"
+        _openCodeBaseUrl.value = savedBaseUrl
+
+        val savedTierStr = prefs.getString("opencode_tier", OpenCodeTier.FREE.name)
+        val loadedTier = try {
+            OpenCodeTier.valueOf(savedTierStr ?: OpenCodeTier.FREE.name)
+        } catch (e: Exception) {
+            OpenCodeTier.FREE
+        }
+        _selectedOpenCodeTier.value = loadedTier
+
+        val savedModelId = prefs.getString("opencode_model_id", "google/gemini-2.0-flash-exp:free")
+        val foundModel = EdgeModelCatalog.openCodeModels.find { it.id == savedModelId }
+            ?: EdgeModelCatalog.openCodeModels.firstOrNull { it.tier == loadedTier }
+            ?: EdgeModelCatalog.openCodeModels.first()
+        _selectedOpenCodeModel.value = foundModel
     }
 
     private fun initializeDefaultSessionAndStorage() {
@@ -776,6 +845,7 @@ class EdgeAIViewModel(
     private var currentStreamingStopHandler: (() -> Unit)? = null
 
     fun stopGeneration() {
+        openCodeService.cancelActiveCall()
         currentStreamingStopHandler?.invoke()
         currentStreamingStopHandler = null
         aiEngine.stopCurrentGeneration()
@@ -807,6 +877,131 @@ class EdgeAIViewModel(
         )
     }
 
+    fun setExecutionEngineMode(mode: ExecutionEngineMode) {
+        _executionEngineMode.value = mode
+        prefs.edit().putString("engine_mode", mode.name).apply()
+        _statusBanner.value = EngineStatusBanner(
+            if (mode == ExecutionEngineMode.OPENCODE_CLOUD)
+                "Modo Nube activado: OpenCode Cloud AI (${_selectedOpenCodeModel.value.name})."
+            else
+                "Modo Local activado: llama.cpp JNI en RAM (100% privado en el teléfono)."
+        )
+    }
+
+    fun setOpenCodeApiKey(key: String) {
+        val trimmed = key.trim()
+        _openCodeApiKey.value = trimmed
+        prefs.edit().putString("opencode_api_key", trimmed).apply()
+        _statusBanner.value = EngineStatusBanner(
+            if (trimmed.isNotBlank()) "API Key de OpenCode guardada correctamente."
+            else "API Key borrada. Los modelos gratis seguirán funcionando."
+        )
+    }
+
+    fun setOpenCodeBaseUrl(url: String) {
+        val trimmed = url.trim()
+        _openCodeBaseUrl.value = trimmed
+        prefs.edit().putString("opencode_base_url", trimmed).apply()
+    }
+
+    fun selectOpenCodeTier(tier: OpenCodeTier) {
+        _selectedOpenCodeTier.value = tier
+        prefs.edit().putString("opencode_tier", tier.name).apply()
+        val firstInTier = EdgeModelCatalog.openCodeModels.firstOrNull { it.tier == tier }
+        if (firstInTier != null) {
+            selectOpenCodeModel(firstInTier)
+        }
+    }
+
+    fun selectOpenCodeModel(model: OpenCodeModelSpec) {
+        _selectedOpenCodeModel.value = model
+        _selectedOpenCodeTier.value = model.tier
+        prefs.edit()
+            .putString("opencode_model_id", model.id)
+            .putString("opencode_tier", model.tier.name)
+            .apply()
+        _statusBanner.value = EngineStatusBanner(
+            "Modelo seleccionado: ${model.name} (${model.tier.badge})"
+        )
+    }
+
+    /**
+     * Procesa una imagen seleccionada por el usuario (Android Photo Picker),
+     * la escala de forma segura a máx 1280px para evitar OOM, y la codifica en Base64
+     * para análisis visual y OCR multimodal.
+     */
+    fun attachImageFromUri(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val resolver = getApplication<Application>().contentResolver
+                var displayName = "foto_${System.currentTimeMillis()}.jpg"
+                var fileSize = 0L
+
+                resolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    val sizeIdx = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (cursor.moveToFirst()) {
+                        if (nameIdx >= 0) displayName = cursor.getString(nameIdx) ?: displayName
+                        if (sizeIdx >= 0) fileSize = cursor.getLong(sizeIdx)
+                    }
+                }
+
+                val inputStream = resolver.openInputStream(uri)
+                if (inputStream == null) {
+                    _statusBanner.value = EngineStatusBanner("No se pudo abrir la foto seleccionada.", isError = true)
+                    return@launch
+                }
+
+                val originalBitmap = BitmapFactory.decodeStream(inputStream)
+                inputStream.close()
+
+                if (originalBitmap == null) {
+                    _statusBanner.value = EngineStatusBanner("No se pudo decodificar la imagen seleccionada.", isError = true)
+                    return@launch
+                }
+
+                // Redimensionar si supera 1280x1280 para agilizar el procesamiento y la red
+                val maxDim = 1280
+                val width = originalBitmap.width
+                val height = originalBitmap.height
+                val scaledBitmap = if (width > maxDim || height > maxDim) {
+                    val ratio = width.toFloat() / height.toFloat()
+                    val targetW = if (ratio > 1f) maxDim else (maxDim * ratio).toInt().coerceAtLeast(1)
+                    val targetH = if (ratio > 1f) (maxDim / ratio).toInt().coerceAtLeast(1) else maxDim
+                    Bitmap.createScaledBitmap(originalBitmap, targetW, targetH, true)
+                } else {
+                    originalBitmap
+                }
+
+                val baos = ByteArrayOutputStream()
+                scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 85, baos)
+                val imageBytes = baos.toByteArray()
+                val base64Str = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
+
+                _attachedImage.value = AttachedImageData(
+                    uri = uri,
+                    base64Data = base64Str,
+                    mimeType = "image/jpeg",
+                    fileName = displayName,
+                    sizeBytes = if (fileSize > 0L) fileSize else imageBytes.size.toLong()
+                )
+
+                _statusBanner.value = EngineStatusBanner(
+                    "📷 Foto lista para análisis visual / OCR: $displayName (${imageBytes.size / 1024} KB)"
+                )
+            } catch (e: Exception) {
+                _statusBanner.value = EngineStatusBanner(
+                    "Error al procesar la imagen: ${e.message}",
+                    isError = true
+                )
+            }
+        }
+    }
+
+    fun clearAttachedImage() {
+        _attachedImage.value = null
+    }
+
     /**
      * Carga un archivo pequeño de texto o código (.txt, .md, .py, .js, .kt, .html, .json, .csv, etc.)
      * para adjuntarlo al mensaje actual.
@@ -822,12 +1017,8 @@ class EdgeAIViewModel(
                     val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                     val sizeIdx = cursor.getColumnIndex(OpenableColumns.SIZE)
                     if (cursor.moveToFirst()) {
-                        if (nameIdx >= 0) {
-                            displayName = cursor.getString(nameIdx) ?: displayName
-                        }
-                        if (sizeIdx >= 0) {
-                            fileSize = cursor.getLong(sizeIdx)
-                        }
+                        if (nameIdx >= 0) displayName = cursor.getString(nameIdx) ?: displayName
+                        if (sizeIdx >= 0) fileSize = cursor.getLong(sizeIdx)
                     }
                 }
 
@@ -847,8 +1038,7 @@ class EdgeAIViewModel(
                     return@launch
                 }
 
-                val textContent = String(bytes, StandardCharsets.UTF_8)
-                    .take(12_000) // Máximo ~12,000 caracteres para mantener inferencia ágil
+                val textContent = String(bytes, StandardCharsets.UTF_8).take(12_000)
                 val ext = displayName.substringAfterLast('.', "txt").lowercase()
 
                 _attachedSmallFile.value = AttachedSmallFile(
@@ -893,24 +1083,37 @@ class EdgeAIViewModel(
 
     fun sendUserMessage(userText: String) {
         val cleanText = userText.trim()
-        val attached = _attachedSmallFile.value
-        if ((cleanText.isEmpty() && attached == null) || _streamingState.value.isGenerating) return
+        val attachedFile = _attachedSmallFile.value
+        val attachedImg = _attachedImage.value
+
+        if ((cleanText.isEmpty() && attachedFile == null && attachedImg == null) || _streamingState.value.isGenerating) {
+            return
+        }
 
         val sessionId = _currentSessionId.value ?: return
         _attachedSmallFile.value = null
+        _attachedImage.value = null
 
         viewModelScope.launch(Dispatchers.IO) {
             val bufferLimit = _inferenceConfig.value.contextBufferSize
             val recentContext = repository.getRecentContextMessages(sessionId, bufferLimit)
 
-            // Construir el mensaje visible del usuario (incluyendo archivo adjunto si existe)
+            // Construir el mensaje visible del usuario en el chat (con foto y archivo adjunto)
             val userDisplayMessage = buildString {
-                if (attached != null) {
-                    append("📎 **Archivo adjunto:** `${attached.fileName}`\n")
-                    append("```").append(attached.extension).append("\n")
-                    append(attached.content.trim()).append("\n```\n\n")
+                if (attachedImg != null) {
+                    append("📷 **Foto adjunta para análisis visual / OCR:** `${attachedImg.fileName}`\n")
+                    // Insertamos el tag de imagen con base64 para que el chat bubble la renderice directamente
+                    append("![${attachedImg.fileName}](data:image/jpeg;base64,${attachedImg.base64Data})\n\n")
                 }
-                append(cleanText.ifEmpty { "Analiza el archivo adjunto ${attached?.fileName}." })
+                if (attachedFile != null) {
+                    append("📎 **Archivo adjunto:** `${attachedFile.fileName}`\n")
+                    append("```").append(attachedFile.extension).append("\n")
+                    append(attachedFile.content.trim()).append("\n```\n\n")
+                }
+                append(cleanText.ifEmpty {
+                    if (attachedImg != null) "Analiza esta imagen detalladamente, extrae cualquier texto escrito (OCR) y describe los detalles visuales."
+                    else "Analiza el archivo adjunto."
+                })
             }
 
             repository.addMessage(
@@ -918,50 +1121,6 @@ class EdgeAIViewModel(
                 content = userDisplayMessage,
                 isUser = true
             )
-
-            // Si no hay ningún modelo cargado en RAM, intentar cargar uno que ya esté descargado en el dispositivo
-            if (!aiEngine.isLoaded) {
-                val downloadedSpec = _catalogModels.value.firstOrNull {
-                    downloader.isModelDownloaded(it.fileName, it.customLocalPath)
-                }
-
-                if (downloadedSpec != null) {
-                    _statusBanner.value = EngineStatusBanner(
-                        "Inicializando ${downloadedSpec.name} (${downloadedSpec.capability.badge}) en RAM...",
-                        isLoading = true
-                    )
-                    val initRes = aiEngine.initEngineSafe(
-                        downloader.getModelFile(downloadedSpec.fileName, downloadedSpec.customLocalPath),
-                        _inferenceConfig.value
-                    )
-                    initRes.onSuccess { details ->
-                        _loadedModelId.value = downloadedSpec.id
-                        _loadedGgufSummary.value = details
-                        if (!downloadedSpec.capability.supportsImages) {
-                            _imageGenerationEnabled.value = false
-                        }
-                        _statusBanner.value = EngineStatusBanner("Modelo en RAM: ${downloadedSpec.name} (${downloadedSpec.capability.badge})")
-                        refreshModelStoreState()
-                    }.onFailure { err ->
-                        _statusBanner.value = EngineStatusBanner(
-                            "Aviso cargando modelo: ${err.message}",
-                            isError = true
-                        )
-                    }
-                }
-            }
-
-            val activeModelSpec = _catalogModels.value.find { it.id == _loadedModelId.value }
-                ?: _catalogModels.value.first()
-
-            // REGLA CLAVE: La creación de imágenes SOLO se activa si el modelo actual tiene la capacidad
-            // TEXT_AND_IMAGE (supportsImages == true) Y el usuario activó la opción de creación de imágenes.
-            // Si está deshabilitada o el modelo es solo de Texto / Código, la IA local genera respuestas en texto.
-            val canModelCreateImages = activeModelSpec.capability.supportsImages
-            if (!canModelCreateImages && _imageGenerationEnabled.value) {
-                _imageGenerationEnabled.value = false
-            }
-            val wantsImage = canModelCreateImages && _imageGenerationEnabled.value
 
             // Si está activada la búsqueda de información adicional en Internet
             val shouldSearchWeb = _webSearchEnabled.value ||
@@ -997,31 +1156,165 @@ class EdgeAIViewModel(
                 if (webContextBlock.isNotBlank()) {
                     append(webContextBlock).append("\n")
                 }
-                append(userDisplayMessage)
-                if (wantsImage) {
-                    append("\n\n(Nota: Describe brevemente la imagen solicitada en español).")
+                append(cleanText.ifEmpty {
+                    if (attachedImg != null) "Analiza la imagen adjunta en detalle (OCR y elementos visuales)."
+                    else "Analiza el archivo adjunto."
+                })
+            }
+
+            // =========================================================================
+            // RUTEO 1: EJECUCIÓN EN LA NUBE VÍA OPENCODE CLOUD AI (API KEY)
+            // =========================================================================
+            if (_executionEngineMode.value == ExecutionEngineMode.OPENCODE_CLOUD) {
+                val cloudModel = _selectedOpenCodeModel.value
+                val startTimeMs = System.currentTimeMillis()
+                var firstTokenTimeMs: Long? = null
+                var accumulatedText = ""
+                var tokenChunks = 0
+                val savedAtomic = java.util.concurrent.atomic.AtomicBoolean(false)
+
+                _streamingState.value = StreamingUiState(
+                    isGenerating = true,
+                    streamingText = "",
+                    ttftMs = null,
+                    liveTokensPerSec = 0f,
+                    tokenCount = 0
+                )
+
+                fun finalizeCloudResponse(wasStoppedByUser: Boolean, errorMsg: String? = null) {
+                    if (!savedAtomic.compareAndSet(false, true)) return
+                    currentStreamingStopHandler = null
+                    val now = System.currentTimeMillis()
+                    val elapsedSec = ((now - (firstTokenTimeMs?.let { startTimeMs + it } ?: startTimeMs)).coerceAtLeast(50L)) / 1000f
+                    val finalTps = if (tokenChunks > 0) (tokenChunks / elapsedSec) else 0f
+                    val finalTtft = firstTokenTimeMs
+
+                    val finalContent = when {
+                        errorMsg != null -> if (accumulatedText.isNotBlank()) "$accumulatedText\n\n⚠️ *$errorMsg*" else "⚠️ $errorMsg"
+                        accumulatedText.isNotBlank() && wasStoppedByUser -> "$accumulatedText\n\n*[Generación detenida]*"
+                        accumulatedText.isNotBlank() -> accumulatedText.trimEnd()
+                        wasStoppedByUser -> "*[Solicitud detenida por el usuario]*"
+                        else -> "Sin respuesta generada por el modelo de OpenCode."
+                    }
+
+                    _streamingState.value = StreamingUiState(isGenerating = false)
+                    viewModelScope.launch(Dispatchers.IO) {
+                        repository.addMessage(
+                            sessionId = sessionId,
+                            content = finalContent,
+                            isUser = false,
+                            tokensPerSec = if (finalTps > 0f) finalTps else null,
+                            ttftMs = finalTtft,
+                            modelUsed = "${cloudModel.name} (${cloudModel.tier.badge})"
+                        )
+                    }
                 }
+
+                currentStreamingStopHandler = {
+                    openCodeService.cancelActiveCall()
+                    finalizeCloudResponse(wasStoppedByUser = true)
+                }
+
+                _statusBanner.value = EngineStatusBanner(
+                    "Conectando con OpenCode Cloud (${cloudModel.name})...",
+                    isLoading = true
+                )
+
+                openCodeService.streamChatCompletion(
+                    apiKey = _openCodeApiKey.value,
+                    baseUrl = _openCodeBaseUrl.value,
+                    model = cloudModel,
+                    systemPrompt = _customSystemPrompt.value,
+                    contextHistory = recentContext,
+                    currentUserText = effectiveUserQuery,
+                    attachedImage = attachedImg,
+                    temperature = _inferenceConfig.value.temperature,
+                    maxTokens = _inferenceConfig.value.maxTokens,
+                    onToken = { token ->
+                        if (savedAtomic.get()) return@streamChatCompletion
+                        val now = System.currentTimeMillis()
+                        if (firstTokenTimeMs == null) {
+                            firstTokenTimeMs = (now - startTimeMs).coerceAtLeast(1L)
+                        }
+                        accumulatedText += token
+                        tokenChunks++
+
+                        val elapsedSec = ((now - (firstTokenTimeMs?.let { startTimeMs + it } ?: startTimeMs)).coerceAtLeast(50L)) / 1000f
+                        val tps = if (tokenChunks > 0) (tokenChunks / elapsedSec) else 0f
+
+                        _streamingState.value = StreamingUiState(
+                            isGenerating = true,
+                            streamingText = accumulatedText,
+                            ttftMs = firstTokenTimeMs,
+                            liveTokensPerSec = tps,
+                            tokenCount = tokenChunks
+                        )
+                    },
+                    onError = { err ->
+                        _statusBanner.value = EngineStatusBanner(err, isError = true)
+                        finalizeCloudResponse(wasStoppedByUser = false, errorMsg = err)
+                    },
+                    onDone = {
+                        _statusBanner.value = EngineStatusBanner("Respuesta completada por ${cloudModel.name}.")
+                        finalizeCloudResponse(wasStoppedByUser = false)
+                    }
+                )
+                return@launch
+            }
+
+            // =========================================================================
+            // RUTEO 2: EJECUCIÓN LOCAL EN RAM MEDIANTE LLAMA.CPP JNI
+            // =========================================================================
+            if (!aiEngine.isLoaded) {
+                val downloadedSpec = _catalogModels.value.firstOrNull {
+                    downloader.isModelDownloaded(it.fileName, it.customLocalPath)
+                }
+
+                if (downloadedSpec != null) {
+                    _statusBanner.value = EngineStatusBanner(
+                        "Inicializando ${downloadedSpec.name} (${downloadedSpec.capability.badge}) en RAM...",
+                        isLoading = true
+                    )
+                    val initRes = aiEngine.initEngineSafe(
+                        downloader.getModelFile(downloadedSpec.fileName, downloadedSpec.customLocalPath),
+                        _inferenceConfig.value
+                    )
+                    initRes.onSuccess { details ->
+                        _loadedModelId.value = downloadedSpec.id
+                        _loadedGgufSummary.value = details
+                        _statusBanner.value = EngineStatusBanner("Modelo en RAM: ${downloadedSpec.name} (${downloadedSpec.capability.badge})")
+                        refreshModelStoreState()
+                    }.onFailure { err ->
+                        _statusBanner.value = EngineStatusBanner(
+                            "Aviso cargando modelo: ${err.message}",
+                            isError = true
+                        )
+                    }
+                }
+            }
+
+            val activeModelSpec = _catalogModels.value.find { it.id == _loadedModelId.value }
+                ?: _catalogModels.value.first()
+
+            val effectiveLocalQuery = buildString {
+                if (attachedImg != null) {
+                    append("[Nota: El usuario adjuntó una foto '${attachedImg.fileName}'].\n")
+                    append("Para análisis neuronal visual y OCR de alta fidelidad, te sugerimos activar el Modo Nube (OpenCode).\n\n")
+                }
+                append(effectiveUserQuery)
             }
 
             val fullContextualPrompt = EdgeModelCatalog.buildContextualPrompt(
                 format = activeModelSpec.promptFormat,
                 systemPrompt = _customSystemPrompt.value,
                 contextHistory = recentContext,
-                currentUserMessage = effectiveUserQuery,
+                currentUserMessage = effectiveLocalQuery,
                 maxContextMessages = bufferLimit
             )
 
             val startTimeMs = System.currentTimeMillis()
             var firstTokenTimeMs: Long? = null
-            var accumulatedText = if (wantsImage) {
-                val imgPrompt = cleanText
-                    .replace(Regex("(?i)(genera una imagen de|generar una imagen de|crea una imagen de|dibuja un|dibuja una|dibuja|genera una imagen|crea una imagen)"), "")
-                    .trim()
-                    .ifEmpty { cleanText }
-                "[GENERAR_IMAGEN: $imgPrompt]\n\n"
-            } else {
-                ""
-            }
+            var accumulatedText = ""
             var tokenChunks = 0
             val savedAtomic = java.util.concurrent.atomic.AtomicBoolean(false)
 

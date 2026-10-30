@@ -1,6 +1,56 @@
 package com.example.domain
 
+import android.net.Uri
 import com.example.data.local.ChatMessageEntity
+
+enum class ExecutionEngineMode(val label: String, val badge: String, val description: String) {
+    LOCAL_GGUF(
+        label = "Motor Local GGUF",
+        badge = "📱 En RAM (Local)",
+        description = "Ejecución 100% privada y local en la RAM del teléfono mediante llama.cpp (C++ JNI). No requiere Internet ni consume datos."
+    ),
+    OPENCODE_CLOUD(
+        label = "OpenCode Cloud AI",
+        badge = "☁️ OpenCode Cloud",
+        description = "Modelos avanzados y agentes en la nube vía API Key de OpenCode. Acceso a modelos Gratis, Go y Premium con visión multimodal y OCR."
+    )
+}
+
+enum class OpenCodeTier(val label: String, val badge: String, val shortDesc: String) {
+    FREE(
+        label = "Gratis (Free)",
+        badge = "✨ Gratis",
+        shortDesc = "Modelos gratuitos de alta velocidad, codificación y visión multimodal sin costo."
+    ),
+    GO(
+        label = "Suscripción Go",
+        badge = "⚡ Go",
+        shortDesc = "Suscripción Go: Modelos optimizados, respuestas ultra veloces, agentes y baja latencia."
+    ),
+    PREMIUM(
+        label = "Suscripción Premium",
+        badge = "💎 Premium",
+        shortDesc = "Suscripción Premium: Modelos insignia con razonamiento profundo, visión de alta resolución y agentes autónomos."
+    )
+}
+
+data class OpenCodeModelSpec(
+    val id: String,
+    val name: String,
+    val tier: OpenCodeTier,
+    val provider: String,
+    val supportsVision: Boolean,
+    val supportsCode: Boolean,
+    val description: String
+)
+
+data class AttachedImageData(
+    val uri: Uri,
+    val base64Data: String,
+    val mimeType: String,
+    val fileName: String,
+    val sizeBytes: Long
+)
 
 enum class PromptTemplateFormat {
     CHATML,
@@ -11,7 +61,7 @@ enum class PromptTemplateFormat {
 
 /**
  * Clasificación de capacidades de cada modelo para mostrar en Model Store y habilitar/deshabilitar
- * funciones como la creación de imágenes o ejecución de código en el chat.
+ * funciones como visión/análisis de fotos o ejecución de código en el chat.
  */
 enum class ModelCapabilityType(
     val label: String,
@@ -30,14 +80,14 @@ enum class ModelCapabilityType(
     TEXT_AND_CODE(
         label = "Texto + Código",
         badge = "💻 Texto + Código",
-        detailDescription = "Genera respuestas en texto y scripts ejecutables (HTML, Python, JS) con sangría de 4 espacios.",
+        detailDescription = "Genera respuestas en texto y scripts ejecutables (HTML autocontenido con CSS/JS, Python) con sangría de 4 espacios.",
         supportsCode = true,
         supportsImages = false
     ),
     TEXT_AND_IMAGE(
-        label = "Texto + Imágenes",
-        badge = "🎨 Texto + Imágenes",
-        detailDescription = "Modelo multimodal capaz de responder en texto, escribir código y habilitar la creación de imágenes.",
+        label = "Visión + Multimodal",
+        badge = "📷 Visión + Fotos",
+        detailDescription = "Capaz de inspeccionar fotos adjuntas, extraer texto (OCR), identificar objetos y escribir código.",
         supportsCode = true,
         supportsImages = true
     );
@@ -362,8 +412,160 @@ object EdgeModelCatalog {
         )
     )
 
+    /**
+     * Catálogo oficial de modelos de OpenCode organizados por nivel de suscripción:
+     * - ✨ Gratis (Free): Modelos sin costo de inferencia (Llama 3.2, Qwen Coder, Gemini 2.0 Flash Vision, DeepSeek R1)
+     * - ⚡ Go: Suscripción Go con agentes de alta velocidad y baja latencia
+     * - 💎 Premium: Suscripción Premium con los modelos más avanzados (Claude 3.5 Sonnet, GPT-4o, o1, Gemini Pro)
+     */
+    val openCodeModels: List<OpenCodeModelSpec> = listOf(
+        // NIVEL GRATIS (FREE)
+        OpenCodeModelSpec(
+            id = "opencode/free",
+            name = "OpenCode Free Base",
+            tier = OpenCodeTier.FREE,
+            provider = "OpenCode",
+            supportsVision = false,
+            supportsCode = true,
+            description = "Modelo base gratuito de OpenCode. Rápido y eficiente para chat y preguntas generales."
+        ),
+        OpenCodeModelSpec(
+            id = "google/gemini-2.0-flash-exp:free",
+            name = "Gemini 2.0 Flash (Visión + OCR Gratis)",
+            tier = OpenCodeTier.FREE,
+            provider = "Google DeepMind",
+            supportsVision = true,
+            supportsCode = true,
+            description = "Visión multimodal avanzada gratuita: analiza fotos, extrae texto (OCR) y genera código a altísima velocidad."
+        ),
+        OpenCodeModelSpec(
+            id = "qwen/qwen-2.5-coder-32b-instruct:free",
+            name = "Qwen 2.5 Coder 32B (Especialista Código Gratis)",
+            tier = OpenCodeTier.FREE,
+            provider = "Alibaba Qwen",
+            supportsVision = false,
+            supportsCode = true,
+            description = "Potente modelo de 32B parámetros sin costo, entrenado para HTML5 completo con JS/CSS y Python."
+        ),
+        OpenCodeModelSpec(
+            id = "meta-llama/llama-3.2-3b-instruct:free",
+            name = "Llama 3.2 3B Instruct (Free)",
+            tier = OpenCodeTier.FREE,
+            provider = "Meta AI",
+            supportsVision = false,
+            supportsCode = true,
+            description = "Modelo ligero, rápido y versátil de Meta optimizado para respuestas conversacionales inmediatas."
+        ),
+        OpenCodeModelSpec(
+            id = "deepseek/deepseek-r1:free",
+            name = "DeepSeek R1 Reasoning (Free)",
+            tier = OpenCodeTier.FREE,
+            provider = "DeepSeek",
+            supportsVision = false,
+            supportsCode = true,
+            description = "Razonamiento paso a paso, matemáticas complejas y lógica algorítmica sin costo."
+        ),
+
+        // NIVEL GO (SUSCRIPCIÓN GO)
+        OpenCodeModelSpec(
+            id = "opencode/go",
+            name = "OpenCode Go Agent",
+            tier = OpenCodeTier.GO,
+            provider = "OpenCode",
+            supportsVision = true,
+            supportsCode = true,
+            description = "Agente de OpenCode optimizado para velocidad, visión multimodal y ejecución de tareas complejas."
+        ),
+        OpenCodeModelSpec(
+            id = "deepseek/deepseek-chat",
+            name = "DeepSeek V3 Chat (Go)",
+            tier = OpenCodeTier.GO,
+            provider = "DeepSeek",
+            supportsVision = false,
+            supportsCode = true,
+            description = "Modelo de 671B parámetros de vanguardia con alta inteligencia lingüística y programación."
+        ),
+        OpenCodeModelSpec(
+            id = "openai/gpt-4o-mini",
+            name = "GPT-4o Mini (Go)",
+            tier = OpenCodeTier.GO,
+            provider = "OpenAI",
+            supportsVision = true,
+            supportsCode = true,
+            description = "Inferencia ultrarrápida con visión de alta resolución, OCR exacto y generación de código."
+        ),
+        OpenCodeModelSpec(
+            id = "anthropic/claude-3-haiku",
+            name = "Claude 3 Haiku (Go)",
+            tier = OpenCodeTier.GO,
+            provider = "Anthropic",
+            supportsVision = true,
+            supportsCode = true,
+            description = "Respuestas casi instantáneas con análisis de imágenes y redacción concisa."
+        ),
+        OpenCodeModelSpec(
+            id = "meta-llama/llama-3.3-70b-instruct",
+            name = "Llama 3.3 70B Instruct (Go)",
+            tier = OpenCodeTier.GO,
+            provider = "Meta AI",
+            supportsVision = false,
+            supportsCode = true,
+            description = "El modelo abierto más poderoso de 70B parámetros para arquitectura y razonamiento profundo."
+        ),
+
+        // NIVEL PREMIUM (SUSCRIPCIÓN PREMIUM)
+        OpenCodeModelSpec(
+            id = "opencode/premium",
+            name = "OpenCode Premium Coding Agent",
+            tier = OpenCodeTier.PREMIUM,
+            provider = "OpenCode",
+            supportsVision = true,
+            supportsCode = true,
+            description = "Agente insignia para desarrollo integral de software, análisis visual de documentos y resolución experta."
+        ),
+        OpenCodeModelSpec(
+            id = "anthropic/claude-3.5-sonnet",
+            name = "Claude 3.5 Sonnet (Premium)",
+            tier = OpenCodeTier.PREMIUM,
+            provider = "Anthropic",
+            supportsVision = true,
+            supportsCode = true,
+            description = "Referente mundial en programación de alta fidelidad, lógica superior y visión detallada."
+        ),
+        OpenCodeModelSpec(
+            id = "openai/gpt-4o",
+            name = "GPT-4o Omnimodal (Premium)",
+            tier = OpenCodeTier.PREMIUM,
+            provider = "OpenAI",
+            supportsVision = true,
+            supportsCode = true,
+            description = "Modelo insignia multimodal con comprensión profunda de imágenes complejas, gráficos y código."
+        ),
+        OpenCodeModelSpec(
+            id = "openai/o1",
+            name = "OpenAI o1 Reasoning (Premium)",
+            tier = OpenCodeTier.PREMIUM,
+            provider = "OpenAI",
+            supportsVision = false,
+            supportsCode = true,
+            description = "Modelo con cadena de pensamiento avanzada para algoritmos difíciles, matemáticas y ciencias."
+        ),
+        OpenCodeModelSpec(
+            id = "google/gemini-2.0-pro-exp-02-05",
+            name = "Gemini 2.0 Pro Experimental (Premium)",
+            tier = OpenCodeTier.PREMIUM,
+            provider = "Google DeepMind",
+            supportsVision = true,
+            supportsCode = true,
+            description = "Modelo más potente de Google con ventana de contexto inmensa y razonamiento multimodal de vanguardia."
+        )
+    )
+
     private const val CODE_INDENTATION_RULE =
-        " Regla de formato: Si escribes código en cualquier lenguaje de programación, envuélvelo siempre en un bloque ```lenguaje y utiliza sangría limpia de 4 espacios en cada bloque o función."
+        "\n\n[REGLAS ESTRICTAS DE CÓDIGO]:\n" +
+        "1. Sangría: Usa siempre sangría limpia de 4 espacios ('    ') en cada bloque o función.\n" +
+        "2. DOCUMENTO WEB COMPLETO EN UN SOLO MENSAJE: Si generas código HTML, web o interactivo, NUNCA dividas el código en archivos separados (CSS o JS externos). DEBES generar SIEMPRE un único documento HTML5 autocontenido (con <!DOCTYPE html>, <html>, <head>, <style>...</style>, <body>, <script>...</script>) dentro de un ÚNICO bloque ```html ... ``` para que el visor integrado pueda ejecutar todo el documento de inmediato con todos sus estilos y funcionalidades intactas.\n" +
+        "3. ANÁLISIS DE IMÁGENES / OCR: Si el usuario adjunta una foto o imagen, inspecciona minuciosamente el contenido visual: extrae cualquier texto escrito visible (OCR), describe objetos, colores, diagramas o resuelve lo que solicite el usuario sobre la imagen."
 
     fun buildContextualPrompt(
         format: PromptTemplateFormat,

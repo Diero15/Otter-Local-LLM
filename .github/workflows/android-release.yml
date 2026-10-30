@@ -64,39 +64,39 @@ jobs:
       - name: Copy Release APK into release/ folder
         run: |
           mkdir -p release
-          cp app/build/outputs/apk/release/app-release.apk release/Otter-Local-LLM-v1.0.0-beta.1-release.apk
-          cp app/build/outputs/apk/release/app-release.apk Otter-Local-LLM-v1.0.0-beta.1-release.apk
-          cp app/build/outputs/bundle/release/app-release.aab Otter-Local-LLM-v1.0.0-beta.1-release.aab
-          ls -lh release/Otter-Local-LLM-v1.0.0-beta.1-release.apk
+          cp app/build/outputs/apk/release/app-release.apk release/Otter-Local-LLM-v1.0.0-beta.2-release.apk
+          cp app/build/outputs/apk/release/app-release.apk Otter-Local-LLM-v1.0.0-beta.2-release.apk
+          cp app/build/outputs/bundle/release/app-release.aab Otter-Local-LLM-v1.0.0-beta.2-release.aab
+          ls -lh release/Otter-Local-LLM-v1.0.0-beta.2-release.apk
 
       - name: Commit Release APK to release/ folder in GitHub repo
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f release/Otter-Local-LLM-v1.0.0-beta.1-release.apk
-          git diff --staged --quiet || git commit -m "chore(release): add signed Otter-Local-LLM-v1.0.0-beta.1-release.apk [skip ci]"
+          git add -f release/Otter-Local-LLM-v1.0.0-beta.2-release.apk
+          git diff --staged --quiet || git commit -m "chore(release): add signed Otter-Local-LLM-v1.0.0-beta.2-release.apk [skip ci]"
           git push
 
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Otter-Local-LLM-Release-APK
-          path: Otter-Local-LLM-v1.0.0-beta.1-release.apk
+          path: Otter-Local-LLM-v1.0.0-beta.2-release.apk
 
       - name: Upload Release AAB Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Otter-Local-LLM-Release-AAB
-          path: Otter-Local-LLM-v1.0.0-beta.1-release.aab
+          path: Otter-Local-LLM-v1.0.0-beta.2-release.aab
 
-      - name: Publish APK directly to GitHub Releases (v1.0.0-beta.1)
+      - name: Publish APK directly to GitHub Releases (v1.0.0-beta.2)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0-beta.1
-          name: "🦦 Otter Local LLM v1.0.0-beta.1 (Beta Test - Release APK)"
+          tag_name: v1.0.0-beta.2
+          name: "🦦 Otter Local LLM v1.0.0-beta.2 (Beta Test - Release APK)"
           body_path: RELEASE_NOTES_BETA.md
           prerelease: true
           files: |
-            Otter-Local-LLM-v1.0.0-beta.1-release.apk
-            Otter-Local-LLM-v1.0.0-beta.1-release.aab
+            Otter-Local-LLM-v1.0.0-beta.2-release.apk
+            Otter-Local-LLM-v1.0.0-beta.2-release.aab

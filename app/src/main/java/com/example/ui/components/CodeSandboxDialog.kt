@@ -43,6 +43,8 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import java.net.URLEncoder
 
 enum class SandboxEngineMode(val label: String) {
@@ -506,34 +508,43 @@ fun GeneratedImageCard(
                     .fillMaxWidth()
                     .height(220.dp)
                     .padding(8.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
             ) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { ctx ->
-                        WebView(ctx).apply {
-                            settings.javaScriptEnabled = true
-                            settings.domStorageEnabled = true
-                            settings.loadWithOverviewMode = true
-                            settings.useWideViewPort = true
-                            webViewClient = WebViewClient()
+                if (!svgMarkup.isNullOrBlank()) {
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { ctx ->
+                            WebView(ctx).apply {
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                settings.loadWithOverviewMode = true
+                                settings.useWideViewPort = true
+                                webViewClient = WebViewClient()
+                            }
+                        },
+                        update = { webView ->
+                            if (webView.tag != svgMarkup) {
+                                webView.tag = svgMarkup
+                                val html = buildImageRenderHtml(cleanPrompt, resolvedUrl, svgMarkup)
+                                webView.loadDataWithBaseURL(
+                                    "https://localhost/",
+                                    html,
+                                    "text/html",
+                                    "UTF-8",
+                                    null
+                                )
+                            }
                         }
-                    },
-                    update = { webView ->
-                        val tagKey = svgMarkup ?: resolvedUrl
-                        if (webView.tag != tagKey) {
-                            webView.tag = tagKey
-                            val html = buildImageRenderHtml(cleanPrompt, resolvedUrl, svgMarkup)
-                            webView.loadDataWithBaseURL(
-                                "https://localhost/",
-                                html,
-                                "text/html",
-                                "UTF-8",
-                                null
-                            )
-                        }
-                    }
-                )
+                    )
+                } else {
+                    AsyncImage(
+                        model = resolvedUrl,
+                        contentDescription = cleanPrompt,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
         }
     }

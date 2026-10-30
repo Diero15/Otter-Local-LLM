@@ -95,6 +95,12 @@ fun EdgeLLMStudioApp(viewModel: EdgeAIViewModel) {
     val inferenceConfig by viewModel.inferenceConfig.collectAsStateWithLifecycle()
     val memorySnapshot by viewModel.memorySnapshot.collectAsStateWithLifecycle()
     val attachedSmallFile by viewModel.attachedSmallFile.collectAsStateWithLifecycle()
+    val attachedImage by viewModel.attachedImage.collectAsStateWithLifecycle()
+    val executionEngineMode by viewModel.executionEngineMode.collectAsStateWithLifecycle()
+    val openCodeApiKey by viewModel.openCodeApiKey.collectAsStateWithLifecycle()
+    val openCodeBaseUrl by viewModel.openCodeBaseUrl.collectAsStateWithLifecycle()
+    val selectedOpenCodeTier by viewModel.selectedOpenCodeTier.collectAsStateWithLifecycle()
+    val selectedOpenCodeModel by viewModel.selectedOpenCodeModel.collectAsStateWithLifecycle()
     val webSearchEnabled by viewModel.webSearchEnabled.collectAsStateWithLifecycle()
     val imageGenerationEnabled by viewModel.imageGenerationEnabled.collectAsStateWithLifecycle()
     val statusBanner by viewModel.statusBanner.collectAsStateWithLifecycle()
@@ -228,6 +234,12 @@ fun EdgeLLMStudioApp(viewModel: EdgeAIViewModel) {
                             loadedModel = loadedModelInfo,
                             memorySnapshot = memorySnapshot,
                             attachedSmallFile = attachedSmallFile,
+                            attachedImage = attachedImage,
+                            executionEngineMode = executionEngineMode,
+                            openCodeApiKey = openCodeApiKey,
+                            openCodeBaseUrl = openCodeBaseUrl,
+                            selectedOpenCodeTier = selectedOpenCodeTier,
+                            selectedOpenCodeModel = selectedOpenCodeModel,
                             webSearchEnabled = webSearchEnabled,
                             imageGenerationEnabled = imageGenerationEnabled,
                             onSelectSession = viewModel::selectSession,
@@ -239,6 +251,13 @@ fun EdgeLLMStudioApp(viewModel: EdgeAIViewModel) {
                             onStopGeneration = viewModel::stopGeneration,
                             onAttachSmallFile = viewModel::attachSmallFileFromUri,
                             onClearAttachedFile = viewModel::clearAttachedSmallFile,
+                            onAttachImage = viewModel::attachImageFromUri,
+                            onClearAttachedImage = viewModel::clearAttachedImage,
+                            onSelectEngineMode = viewModel::setExecutionEngineMode,
+                            onUpdateOpenCodeApiKey = viewModel::setOpenCodeApiKey,
+                            onUpdateOpenCodeBaseUrl = viewModel::setOpenCodeBaseUrl,
+                            onSelectOpenCodeTier = viewModel::selectOpenCodeTier,
+                            onSelectOpenCodeModel = viewModel::selectOpenCodeModel,
                             onToggleWebSearch = viewModel::toggleWebSearch,
                             onToggleImageGeneration = viewModel::toggleImageGeneration,
                             onSelectPersonaQuick = viewModel::selectPersona,
